@@ -1,13 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodSchema } from 'zod';
 import { AppError, ErrorCodes } from '../utils/errors.js';
+import { logger } from '../config/logger.js';
 
 export function validateBody<T>(schema: ZodSchema<T>) {
   return (req: Request, res: Response, next: NextFunction) => {
     const result = schema.safeParse(req.body);
     if (!result.success) {
+      logger.error({ errors: result.error.errors }, 'Validation error');
       return next(
-        new AppError(ErrorCodes.INVALID_INPUT, 'Invalid request body', 400)
+        new AppError(ErrorCodes.INVALID_INPUT, `Invalid request body: ${result.error.errors[0]?.message || 'validation failed'}`, 400)
       );
     }
     req.body = result.data;

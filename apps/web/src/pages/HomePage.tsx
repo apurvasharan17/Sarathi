@@ -25,9 +25,10 @@ export default function HomePage() {
     { number: 1, label: t('home.tiles.sendMoney'), path: '/send-money' },
     { number: 2, label: t('home.tiles.creditScore'), path: '/score' },
     { number: 3, label: t('home.tiles.loan'), path: '/loan', badge: data?.activeLoan ? '!' : null },
-    { number: 4, label: t('home.tiles.transactions'), path: '/transactions' },
-    { number: 5, label: t('home.tiles.changeState'), path: '/settings' },
-    { number: 6, label: t('home.tiles.help'), path: '/admin' },
+    { number: 4, label: 'SafeSend', path: '/safesend' },
+    { number: 5, label: t('home.tiles.transactions'), path: '/transactions' },
+    { number: 6, label: t('home.tiles.changeState'), path: '/settings' },
+    { number: 7, label: t('home.tiles.help'), path: '/admin' },
   ];
 
   return (
@@ -54,7 +55,7 @@ export default function HomePage() {
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-4 sm:gap-5">
         {tiles.map(tile => (
           <div
             key={tile.number}

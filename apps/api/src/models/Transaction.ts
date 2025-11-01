@@ -6,7 +6,18 @@ export interface TransactionDocument extends Omit<ITransaction, '_id'>, Document
 const transactionSchema = new Schema<TransactionDocument>(
   {
     userId: { type: String, required: true, index: true },
-    type: { type: String, enum: ['remit', 'repay', 'loan_disbursal'], required: true },
+    type: { 
+      type: String, 
+      enum: [
+        'remit', 
+        'repay', 
+        'loan_disbursal', 
+        'safesend_escrow', 
+        'safesend_release', 
+        'safesend_refund'
+      ], 
+      required: true 
+    },
     amount: { type: Number, required: true },
     counterparty: { type: String },
     stateCode: { type: String, required: true },

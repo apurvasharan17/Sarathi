@@ -12,9 +12,13 @@
   - Bands: A (≥680), B (630-679), C (<630)
   - Score factors: remittance history, stability, counterparty patterns, loan repayment
 - **Instant Micro-Loans**: Rule-based loan approval (₹1,000-5,000) based on credit band
+- **SafeSend Escrow**: Purpose-locked remittances with merchant proof-of-use verification
+  - Lock funds for specific goals (school fees, groceries, rent, medical, utilities)
+  - Merchant submits proof (receipt/photo) → Admin reviews → Funds released or refunded
+  - SMS notifications at every stage via Twilio/Exotel/Gupshup
 - **State Portability**: Change states without losing credit history
 - **Bilingual UI**: English and Hindi (i18next)
-- **Low-Literacy Design**: Six-tile home screen with numeric badges
+- **Low-Literacy Design**: Seven-tile home screen with numeric badges
 
 ## 🏗️ Tech Stack
 
@@ -178,10 +182,14 @@ Access:
 
 1. **Login**: Use any Indian phone number (e.g., `+919876543210`)
 2. **OTP**: Check server console for OTP (with `DEV_SMS_CONSOLE`)
-3. **Seed Data**: Navigate to Admin Panel (tile 6) and seed 6 months of ₹2,500 remittances
+3. **Seed Data**: Navigate to Admin Panel (tile 7) and seed 6 months of ₹2,500 remittances
 4. **Check Score**: Go to Credit Score (tile 2) – you should see Band A (≥680)
 5. **Request Loan**: Go to Loan (tile 3), request ₹5,000, get instant approval
-6. **Change State**: Go to Settings (tile 5), change state – score remains unchanged
+6. **Create Merchants** (for SafeSend): In Admin Panel, create and verify merchants:
+   - Example: "ABC School", +919876543210, "School", DL
+   - Example: "XYZ Grocery", +919876543211, "Grocery", DL
+7. **Try SafeSend**: Go to SafeSend (tile 4), create escrow with verified merchant
+8. **Change State**: Go to Settings (tile 6), change state – score remains unchanged
 
 ## 📡 API Endpoints
 
@@ -211,9 +219,101 @@ Access:
 - `POST /loan/repay` - Repay loan
 - `GET /loan/active` - Get active loan details
 
+### SafeSend
+- `GET /safesend/merchants?stateCode=DL&verified=true` - List merchants
+- `POST /safesend/merchants` - Create merchant (admin only)
+- `POST /safesend/merchants/:id/verify` - Verify merchant (admin only)
+- `POST /safesend/escrow` - Create SafeSend escrow
+- `GET /safesend/escrow/my?page=1&limit=20` - List user's escrows
+- `GET /safesend/escrow/merchant/:merchantId` - List merchant's escrows
+- `GET /safesend/escrow/:escrowId` - Get escrow details with proofs
+- `POST /safesend/proof` - Submit proof (merchant)
+- `GET /safesend/proof/pending` - List pending proofs (admin only)
+- `POST /safesend/proof/review` - Approve/reject proof (admin only)
+- `POST /safesend/escrow/refund` - Refund escrow (admin only)
+
 ### Admin
 - `GET /admin/seed?months=6&amount=2500&counterparty=+919999999999` - Seed historic remittances
 - `POST /admin/poor-network-toggle` - Toggle poor network mode
+
+## 💰 SafeSend Feature
+
+**SafeSend** is a purpose-locked escrow remittance system that ensures funds sent for specific purposes (like school fees or groceries) are only released when the merchant provides proof of purchase.
+
+### How It Works
+
+1. **Sender Creates SafeSend**
+   - Select verified merchant from list
+   - Choose amount and purpose (school fees, groceries, rent, medical, utilities, other)
+   - Add optional notes about the payment
+   - Funds move into escrow with status `awaiting_proof`
+
+2. **Merchant Receives Notification**
+   - SMS alert with escrow details and reference ID
+   - Merchant fulfills the service/purchase
+   - Merchant uploads proof (receipt photo URL, invoice link, etc.) with optional description
+
+3. **Admin Reviews Proof**
+   - Admin panel shows pending proof queue
+   - View proof URL and merchant description
+   - Approve → funds released to merchant, status becomes `released`
+   - Reject → merchant must resubmit with corrections, status returns to `awaiting_proof`
+
+4. **SMS Updates Throughout**
+   - Sender notified when proof submitted, approved/rejected, released
+   - Merchant notified when proof approved/rejected, funds released
+
+5. **Refund Option**
+   - Admin can refund escrow if proof is never submitted or repeatedly rejected
+   - Status becomes `refunded`, funds return to sender
+
+### Data Models
+
+**Merchant**
+```typescript
+{
+  name: string;
+  phoneE164: string;
+  category: string; // e.g., "School", "Grocery Store"
+  verified: boolean; // Only verified merchants appear in SafeSend
+  stateCode: string;
+}
+```
+
+**SafeSend Escrow**
+```typescript
+{
+  senderId: string;
+  merchantId: string;
+  amount: number;
+  goal: 'school_fees'|'groceries'|'rent'|'medical'|'utilities'|'other';
+  status: 'pending'|'awaiting_proof'|'under_review'|'released'|'refunded'|'rejected';
+  lockReason?: string; // Optional notes from sender
+  releasedAt?: Date;
+  refundedAt?: Date;
+}
+```
+
+**SafeSend Proof**
+```typescript
+{
+  escrowId: string;
+  merchantId: string;
+  proofUrl: string; // URL to receipt/photo (uploaded to external service)
+  description?: string;
+  status: 'pending'|'approved'|'rejected';
+  reviewedBy?: string; // Admin user ID
+  reviewedAt?: Date;
+  rejectionReason?: string;
+}
+```
+
+### Use Cases
+
+- **School Fees**: Parents send money for tuition; school submits fee receipt
+- **Groceries**: Family sends money for essentials; shop uploads invoice
+- **Rent**: Remit rent payment; landlord provides rent receipt
+- **Medical**: Send for healthcare; clinic/pharmacy submits bill
 
 ## 🧮 Credit Scoring Algorithm
 
@@ -297,13 +397,14 @@ docker-compose up --build
 ## 🎨 Frontend Screens
 
 1. **Login**: Phone OTP + language selector
-2. **Home**: 6-tile dashboard with numeric badges
+2. **Home**: 7-tile dashboard with numeric badges
 3. **Send Money**: Amount + counterparty form, SMS receipt
 4. **Credit Score**: Big number, band, reason codes, timeline
 5. **Loan**: Request → instant decision → accept → repay
-6. **Transactions**: Paginated list with type/status
-7. **Settings**: Language, state, consent receipts, logout
-8. **Admin**: Seed data, poor network toggle
+6. **SafeSend**: Create escrow, list transfers, view details with proof submissions
+7. **Transactions**: Paginated list with type/status
+8. **Settings**: Language, state, consent receipts, logout
+9. **Admin**: Seed data, merchant management, proof review queue
 
 ## 📱 SMS Provider Configuration
 
@@ -447,6 +548,21 @@ docker run -d -p 6379:6379 redis:7-alpine
 
 ### CORS Error
 - Ensure `WEB_ORIGIN` in `.env` matches your frontend URL
+
+### SafeSend Merchant Dropdown Empty
+- No verified merchants exist yet
+- Go to Admin Panel → Create merchants → Click "Verify" for each merchant
+- Only verified merchants appear in SafeSend dropdown
+
+### Cannot Create Merchant (Admin Panel)
+- **Check you're logged in as admin**: First user to register is automatically admin
+- **Verify all fields are filled**:
+  - Name: e.g., "ABC School"
+  - Phone: Must match format `+919876543210` (Indian number starting with +91, followed by 6-9, then 9 digits)
+  - Category: e.g., "School", "Grocery", "Medical"
+  - State Code: Exactly 2 uppercase letters (e.g., "DL", "MH", "KA")
+- **Check browser console** for detailed error messages (F12 → Console tab)
+- **Check API logs** in terminal for backend errors
 
 ## 📝 License
 

@@ -11,6 +11,13 @@ class APIError extends Error {
   }
 }
 
+// Callback for handling auth errors - will be set by AuthContext
+let onAuthError: (() => void) | null = null;
+
+export function setAuthErrorHandler(handler: () => void) {
+  onAuthError = handler;
+}
+
 async function request<T>(
   endpoint: string,
   options: RequestInit = {}
@@ -34,17 +41,55 @@ async function request<T>(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new APIError(
+    const error = new APIError(
       data.error?.code || 'UNKNOWN_ERROR',
       data.error?.message || 'An error occurred',
       response.status
     );
+
+    // Handle authentication errors (401) - token expired or invalid
+    if (response.status === 401 && onAuthError) {
+      console.warn('Authentication error detected - logging out');
+      onAuthError();
+    }
+
+    throw error;
   }
 
   return data;
 }
 
 export const api = {
+  // Registration & Password login
+  register: (phoneE164: string, password: string) =>
+    request('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ phoneE164, password }),
+    }),
+
+  loginInitiate: (phoneE164: string, password: string) =>
+    request('/auth/login/initiate', {
+      method: 'POST',
+      body: JSON.stringify({ phoneE164, password }),
+    }),
+
+  loginVerify: (phoneE164: string, code: string) =>
+    request<{
+      jwt: string;
+      sarathiId: string;
+      profile: {
+        userId: string;
+        phoneE164: string;
+        preferredLang: string;
+        stateCode: string;
+        kycStatus: string;
+        isAdmin?: boolean;
+      };
+    }>('/auth/login/verify', {
+      method: 'POST',
+      body: JSON.stringify({ phoneE164, code }),
+    }),
+
   // Auth
   sendOTP: (phoneE164: string) =>
     request('/auth/otp/send', {
@@ -244,6 +289,190 @@ export const api = {
     request<{ enabled: boolean }>('/admin/poor-network-toggle', {
       method: 'POST',
       body: JSON.stringify({ enabled }),
+    }),
+
+  // SafeSend
+  getMerchants: (stateCode?: string, verified?: boolean) =>
+    request<{
+      merchants: Array<{
+        _id: string;
+        name: string;
+        phoneE164: string;
+        category: string;
+        verified: boolean;
+        stateCode: string;
+      }>;
+    }>(`/safesend/merchants?${stateCode ? `stateCode=${stateCode}&` : ''}${verified !== undefined ? `verified=${verified}` : ''}`),
+
+  createMerchant: (name: string, phoneE164: string, category: string, stateCode: string) =>
+    request<{
+      merchant: {
+        _id: string;
+        name: string;
+        phoneE164: string;
+        category: string;
+        verified: boolean;
+        stateCode: string;
+      };
+    }>('/safesend/merchants', {
+      method: 'POST',
+      body: JSON.stringify({ name, phoneE164, category, stateCode }),
+    }),
+
+  verifyMerchant: (merchantId: string) =>
+    request<{
+      merchant: {
+        _id: string;
+        name: string;
+        verified: boolean;
+      };
+    }>(`/safesend/merchants/${merchantId}/verify`, {
+      method: 'POST',
+    }),
+
+  createSafeSend: (merchantId: string, amount: number, goal: string, lockReason?: string) =>
+    request<{
+      escrow: {
+        _id: string;
+        senderId: string;
+        merchantId: string;
+        amount: number;
+        goal: string;
+        status: string;
+        createdAt: Date;
+      };
+    }>('/safesend/escrow', {
+      method: 'POST',
+      body: JSON.stringify({ merchantId, amount, goal, lockReason }),
+    }),
+
+  getMySafeSends: (page: number = 1, limit: number = 20) =>
+    request<{
+      escrows: Array<{
+        _id: string;
+        merchantId: string;
+        amount: number;
+        goal: string;
+        status: string;
+        createdAt: Date;
+      }>;
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        pages: number;
+      };
+    }>(`/safesend/escrow/my?page=${page}&limit=${limit}`),
+
+  getMerchantSafeSends: (merchantId: string, page: number = 1, limit: number = 20) =>
+    request<{
+      escrows: Array<{
+        _id: string;
+        senderId: string;
+        amount: number;
+        goal: string;
+        status: string;
+        createdAt: Date;
+      }>;
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        pages: number;
+      };
+    }>(`/safesend/escrow/merchant/${merchantId}?page=${page}&limit=${limit}`),
+
+  getSafeSendDetails: (escrowId: string) =>
+    request<{
+      escrow: {
+        _id: string;
+        senderId: string;
+        merchantId: string;
+        amount: number;
+        goal: string;
+        status: string;
+        lockReason?: string;
+        releasedAt?: Date;
+        refundedAt?: Date;
+        createdAt: Date;
+      };
+      proofs: Array<{
+        _id: string;
+        proofUrl: string;
+        description?: string;
+        status: string;
+        reviewedAt?: Date;
+        rejectionReason?: string;
+        createdAt: Date;
+      }>;
+      merchant: {
+        _id: string;
+        name: string;
+        phoneE164: string;
+        category: string;
+      };
+    }>(`/safesend/escrow/${escrowId}`),
+
+  submitProof: (escrowId: string, proofUrl: string, description?: string) =>
+    request<{
+      proof: {
+        _id: string;
+        escrowId: string;
+        proofUrl: string;
+        status: string;
+        createdAt: Date;
+      };
+    }>('/safesend/proof', {
+      method: 'POST',
+      body: JSON.stringify({ escrowId, proofUrl, description }),
+    }),
+
+  getPendingProofs: (page: number = 1, limit: number = 20) =>
+    request<{
+      proofs: Array<{
+        _id: string;
+        escrowId: string;
+        merchantId: string;
+        proofUrl: string;
+        description?: string;
+        status: string;
+        createdAt: Date;
+      }>;
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        pages: number;
+      };
+    }>(`/safesend/proof/pending?page=${page}&limit=${limit}`),
+
+  reviewProof: (proofId: string, approved: boolean, rejectionReason?: string) =>
+    request<{
+      proof: {
+        _id: string;
+        status: string;
+        reviewedAt: Date;
+      };
+      escrow: {
+        _id: string;
+        status: string;
+        releasedAt?: Date;
+      };
+    }>('/safesend/proof/review', {
+      method: 'POST',
+      body: JSON.stringify({ proofId, approved, rejectionReason }),
+    }),
+
+  refundSafeSend: (escrowId: string) =>
+    request<{
+      escrow: {
+        _id: string;
+        status: string;
+        refundedAt: Date;
+      };
+    }>('/safesend/escrow/refund', {
+      method: 'POST',
+      body: JSON.stringify({ escrowId }),
     }),
 };
 

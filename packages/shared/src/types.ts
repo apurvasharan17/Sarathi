@@ -1,4 +1,4 @@
-import { REASON_CODES, SCORE_BANDS, LOAN_STATUS, TRANSACTION_TYPE, TRANSACTION_STATUS, KYC_STATUS, LANGUAGE } from './constants.js';
+import { REASON_CODES, SCORE_BANDS, LOAN_STATUS, TRANSACTION_TYPE, TRANSACTION_STATUS, KYC_STATUS, LANGUAGE, SAFESEND_STATUS, SAFESEND_GOAL, PROOF_STATUS } from './constants.js';
 
 export type ReasonCode = (typeof REASON_CODES)[keyof typeof REASON_CODES];
 export type ScoreBand = (typeof SCORE_BANDS)[keyof typeof SCORE_BANDS];
@@ -7,6 +7,9 @@ export type TransactionType = (typeof TRANSACTION_TYPE)[keyof typeof TRANSACTION
 export type TransactionStatus = (typeof TRANSACTION_STATUS)[keyof typeof TRANSACTION_STATUS];
 export type KycStatus = (typeof KYC_STATUS)[keyof typeof KYC_STATUS];
 export type Language = (typeof LANGUAGE)[keyof typeof LANGUAGE];
+export type SafeSendStatus = (typeof SAFESEND_STATUS)[keyof typeof SAFESEND_STATUS];
+export type SafeSendGoalType = (typeof SAFESEND_GOAL)[keyof typeof SAFESEND_GOAL];
+export type ProofStatus = (typeof PROOF_STATUS)[keyof typeof PROOF_STATUS];
 
 export interface User {
   _id: string;
@@ -99,5 +102,44 @@ export interface LoanDecision {
     estimatedEMI: number;
     dueDate: Date;
   };
+}
+
+export interface Merchant {
+  _id: string;
+  name: string;
+  phoneE164: string;
+  category: string;
+  verified: boolean;
+  stateCode: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface SafeSendEscrow {
+  _id: string;
+  senderId: string;
+  merchantId: string;
+  amount: number;
+  goal: SafeSendGoalType;
+  status: SafeSendStatus;
+  lockReason?: string;
+  releasedAt?: Date;
+  refundedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface SafeSendProof {
+  _id: string;
+  escrowId: string;
+  merchantId: string;
+  proofUrl: string;
+  description?: string;
+  status: ProofStatus;
+  reviewedBy?: string;
+  reviewedAt?: Date;
+  rejectionReason?: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 

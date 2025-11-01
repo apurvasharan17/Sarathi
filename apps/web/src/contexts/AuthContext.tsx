@@ -1,6 +1,6 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../lib/api';
+import { setAuthErrorHandler } from '../lib/api';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -26,13 +26,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSarathiId(newSarathiId);
   };
 
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem('jwt');
     localStorage.removeItem('sarathiId');
     setJwt(null);
     setSarathiId(null);
     navigate('/login');
-  };
+  }, [navigate]);
+
+  // Set up automatic logout on auth errors (401)
+  useEffect(() => {
+    setAuthErrorHandler(() => {
+      console.warn('Token expired or invalid - logging out');
+      logout();
+    });
+  }, [logout]);
 
   const value = {
     isAuthenticated: !!jwt,

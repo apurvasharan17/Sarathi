@@ -14,6 +14,7 @@ import transactionsRoutes from './routes/transactions.js';
 import scoreRoutes from './routes/score.js';
 import loanRoutes from './routes/loan.js';
 import adminRoutes from './routes/admin.js';
+import safesendRoutes from './routes/safesend.js';
 
 export function createApp() {
   const app = express();
@@ -53,6 +54,7 @@ export function createApp() {
   app.use('/score', scoreRoutes);
   app.use('/loan', loanRoutes);
   app.use('/admin', adminRoutes);
+  app.use('/safesend', safesendRoutes);
 
   // 404 handler
   app.use((req, res) => {

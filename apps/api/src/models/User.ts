@@ -7,6 +7,7 @@ const userSchema = new Schema<UserDocument>(
   {
     phoneE164: { type: String, required: true, unique: true, index: true },
     sarathiId: { type: String, required: true, unique: true, index: true },
+    passwordHash: { type: String },
     preferredLang: { type: String, enum: ['en', 'hi'], default: 'en' },
     stateCode: { type: String, required: true, length: 2 },
     kycStatus: { type: String, enum: ['none', 'basic'], default: 'none' },

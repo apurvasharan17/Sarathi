@@ -11,6 +11,8 @@ import LoanPage from './pages/LoanPage';
 import TransactionsPage from './pages/TransactionsPage';
 import SettingsPage from './pages/SettingsPage';
 import AdminPage from './pages/AdminPage';
+import SafeSendPage from './pages/SafeSendPage';
+import SafeSendDetailsPage from './pages/SafeSendDetailsPage';
 
 function App() {
   return (
@@ -71,6 +73,22 @@ function App() {
             element={
               <ProtectedRoute>
                 <AdminPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/safesend"
+            element={
+              <ProtectedRoute>
+                <SafeSendPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/safesend/:escrowId"
+            element={
+              <ProtectedRoute>
+                <SafeSendDetailsPage />
               </ProtectedRoute>
             }
           />

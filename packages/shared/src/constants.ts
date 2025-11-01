@@ -25,12 +25,39 @@ export const TRANSACTION_TYPE = {
   REMIT: 'remit',
   REPAY: 'repay',
   LOAN_DISBURSAL: 'loan_disbursal',
+  SAFESEND_ESCROW: 'safesend_escrow',
+  SAFESEND_RELEASE: 'safesend_release',
+  SAFESEND_REFUND: 'safesend_refund',
 } as const;
 
 export const TRANSACTION_STATUS = {
   SUCCESS: 'success',
   FAILED: 'failed',
   PENDING: 'pending',
+} as const;
+
+export const SAFESEND_STATUS = {
+  PENDING: 'pending',
+  AWAITING_PROOF: 'awaiting_proof',
+  UNDER_REVIEW: 'under_review',
+  RELEASED: 'released',
+  REFUNDED: 'refunded',
+  REJECTED: 'rejected',
+} as const;
+
+export const SAFESEND_GOAL = {
+  SCHOOL_FEES: 'school_fees',
+  GROCERIES: 'groceries',
+  RENT: 'rent',
+  MEDICAL: 'medical',
+  UTILITIES: 'utilities',
+  OTHER: 'other',
+} as const;
+
+export const PROOF_STATUS = {
+  PENDING: 'pending',
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
 } as const;
 
 export const KYC_STATUS = {
