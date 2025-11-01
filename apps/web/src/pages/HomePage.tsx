@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { Layout } from '../components/Layout';
 
+// HomePage with AI Assistant tile #8
 export default function HomePage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -29,6 +30,7 @@ export default function HomePage() {
     { number: 5, label: t('home.tiles.transactions'), path: '/transactions' },
     { number: 6, label: t('home.tiles.changeState'), path: '/settings' },
     { number: 7, label: t('home.tiles.help'), path: '/admin' },
+    { number: 8, label: i18n.language === 'hi' ? 'AI सहायक 🤖' : 'AI Assistant 🤖', path: '/chat' },
   ];
 
   return (

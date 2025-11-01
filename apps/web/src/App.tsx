@@ -13,6 +13,7 @@ import SettingsPage from './pages/SettingsPage';
 import AdminPage from './pages/AdminPage';
 import SafeSendPage from './pages/SafeSendPage';
 import SafeSendDetailsPage from './pages/SafeSendDetailsPage';
+import ChatPage from './pages/ChatPage';
 
 function App() {
   return (
@@ -89,6 +90,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <SafeSendDetailsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chat"
+            element={
+              <ProtectedRoute>
+                <ChatPage />
               </ProtectedRoute>
             }
           />

@@ -474,6 +474,16 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ escrowId }),
     }),
+
+  // AI Chat
+  sendChatMessage: (message: string, language: 'en' | 'hi', history: Array<{ role: string; content: string }>) =>
+    request<{
+      response: string;
+      timestamp: string;
+    }>('/chat/message', {
+      method: 'POST',
+      body: JSON.stringify({ message, language, history }),
+    }),
 };
 
 export { APIError };

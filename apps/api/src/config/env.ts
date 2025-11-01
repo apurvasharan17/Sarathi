@@ -13,6 +13,7 @@ export const env = {
   SMS_API_SECRET: process.env.SMS_API_SECRET || '',
   SMS_SENDER_ID: process.env.SMS_SENDER_ID || 'SARATHI',
   WEB_ORIGIN: process.env.WEB_ORIGIN || 'http://localhost:5173',
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
 } as const;
 
 export const isDevelopment = env.NODE_ENV === 'development';
