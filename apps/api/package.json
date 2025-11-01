@@ -15,6 +15,7 @@
     "list-admins": "tsx src/scripts/listAdmins.ts",
     "view-data": "tsx src/scripts/viewData.ts",
     "fix-transaction-index": "tsx src/scripts/dropTransactionIdIndex.ts",
+    "test-gemini": "tsx src/scripts/testGemini.ts",
     "lint": "eslint src --ext .ts"
   },
   "dependencies": {
@@ -22,7 +23,7 @@
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.1",
-    "openai": "^4.20.0",
+    "@google/generative-ai": "^0.21.0",
     "express": "^4.18.2",
     "express-rate-limit": "^7.1.5",
     "jsonwebtoken": "^9.0.2",

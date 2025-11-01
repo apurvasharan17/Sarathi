@@ -20,6 +20,7 @@
   "home": {
     "welcome": "स्वागत है, {{name}}",
     "sarathiId": "सारथी आईडी: {{id}}",
+    "balance": "उपलब्ध राशि",
     "tiles": {
       "sendMoney": "पैसे भेजें",
       "creditScore": "क्रेडिट स्कोर",
@@ -27,6 +28,18 @@
       "transactions": "लेन-देन",
       "changeState": "राज्य बदलें",
       "help": "मदद"
+    },
+    "transactions": {
+      "title": "हाल के लेन-देन",
+      "viewAll": "सभी देखें",
+      "empty": "अभी कोई हाल का लेन-देन नहीं",
+      "counterparty": "प्राप्तकर्ता: {{value}}",
+      "unknown": "लेन-देन",
+      "risk": {
+        "low": "कम जोखिम",
+        "medium": "मध्यम जोखिम",
+        "high": "उच्च जोखिम"
+      }
     }
   },
   "sendMoney": {
@@ -51,7 +64,13 @@
     "stability": "स्थिर आय पैटर्न",
     "counterparty": "नियमित प्राप्तकर्ता",
     "firstLoan": "पहला लोन चुकाया गया",
-    "defaultRisk": "पिछली चूक से स्कोर प्रभावित"
+    "defaultRisk": "पिछली चूक से स्कोर प्रभावित",
+    "timelyRepay": "समय पर चुकौती का लाभ",
+    "balanceStability": "निरंतर बैलेंस बनाए रखा",
+    "lowRiskActivity": "नियमित कम-जोखिम लेन-देन",
+    "delayedRepay": "विलंबित चुकौती दर्ज",
+    "overdraftRisk": "ओवरड्राफ्ट प्रयास से स्कोर कम हुआ",
+    "highRiskActivity": "उच्च-जोखिम लेन-देन दिखे"
   },
   "loan": {
     "title": "लोन",
@@ -81,7 +100,10 @@
     "type": {
       "remit": "पैसे भेजे गए",
       "repay": "लोन चुकौती",
-      "loan_disbursal": "लोन वितरित"
+      "loan_disbursal": "लोन वितरित",
+      "safesend_escrow": "सेफसेंड एस्क्रो",
+      "safesend_release": "सेफसेंड जारी",
+      "safesend_refund": "सेफसेंड रिफंड"
     },
     "status": {
       "success": "सफल",

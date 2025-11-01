@@ -124,6 +124,18 @@ export const api = {
         stateCode: string;
         kycStatus: string;
         isAdmin: boolean;
+        totalMoney: number;
+        transactionHistory: Array<{
+          timestamp: Date;
+          amount: number;
+          type: 'debit' | 'credit';
+          transactionType: string;
+          counterparty?: string;
+          description?: string;
+          balanceAfter: number;
+          transactionId?: string;
+          riskLevel: 'low' | 'medium' | 'high';
+        }>;
       };
       latestScore: {
         score: number;
@@ -200,6 +212,8 @@ export const api = {
       status: string;
       amount: number;
       createdAt: Date;
+      totalMoney: number;
+      recipientId: string;
     }>('/transactions/remit', {
       method: 'POST',
       body: JSON.stringify({ amount, counterparty }),
@@ -244,6 +258,8 @@ export const api = {
     request<{
       status: string;
       disbursedAt: Date;
+      transactionId: string;
+      totalMoney: number;
     }>('/loan/accept', {
       method: 'POST',
       body: JSON.stringify({ loanId }),
@@ -254,6 +270,7 @@ export const api = {
       status: string;
       remaining: number;
       transactionId: string;
+      totalMoney: number;
     }>('/loan/repay', {
       method: 'POST',
       body: JSON.stringify({ loanId, amount }),
@@ -341,6 +358,7 @@ export const api = {
         status: string;
         createdAt: Date;
       };
+      totalMoney: number;
     }>('/safesend/escrow', {
       method: 'POST',
       body: JSON.stringify({ merchantId, amount, goal, lockReason }),
@@ -470,6 +488,7 @@ export const api = {
         status: string;
         refundedAt: Date;
       };
+      totalMoney: number;
     }>('/safesend/escrow/refund', {
       method: 'POST',
       body: JSON.stringify({ escrowId }),

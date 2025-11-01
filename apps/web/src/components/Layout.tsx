@@ -30,25 +30,17 @@ export function Layout({
         backgroundRepeat: 'no-repeat',
       }
     : undefined;
-  const containerClassName = `min-h-screen relative ${hasBackground ? 'bg-cover bg-center bg-no-repeat' : 'bg-gray-50'}`;
+  const containerClassName = `min-h-screen relative pb-16 ${hasBackground ? 'bg-cover bg-center bg-no-repeat' : 'bg-cyan-100'}`;
   const headerClassName = hasBackground
-    ? 'bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 border-b border-white/30 text-primary-700'
-    : 'bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 text-gray-900 border-b border-gray-100';
-  const backButtonHoverClass = hasBackground ? 'hover:bg-primary-100 text-primary-700' : 'hover:bg-gray-100';
+    ? 'bg-sky-200 text-gray-900 border-b border-sky-300 shadow-sm'
+    : 'bg-sky-200 text-gray-900 border-b border-sky-300 shadow-sm';
+  const backButtonHoverClass = 'hover:bg-white/60 text-gray-900';
   const mainClassName = `max-w-4xl mx-auto px-4 py-6 ${hasBackground ? 'bg-white/90 rounded-2xl shadow-lg mt-6 backdrop-blur-sm' : ''}`;
 
   return (
     <div className={containerClassName} style={containerStyle}>
-      {!hasBackground && (
-        <>
-          {/* Animated gradient backdrop */}
-          <div className="absolute inset-0 -z-10 bg-gradient-to-br from-orange-50 via-blue-50 to-orange-100 animate-gradient-slow" style={{ backgroundSize: '200% 200%' }}></div>
-          {/* Soft floating blobs */}
-          <div className="absolute -z-10 top-16 -left-8 w-56 h-56 rounded-full bg-orange-200/40 blur-3xl animate-float-slow"></div>
-          <div className="absolute -z-10 bottom-10 -right-8 w-56 h-56 rounded-full bg-primary-200/40 blur-3xl animate-float-slow" style={{ animationDelay: '1.5s' }}></div>
-        </>
-      )}
-      <header className={headerClassName}>
+      {!hasBackground && null}
+      <header className={`${headerClassName} sticky top-0 z-20 backdrop-blur bg-opacity-95 bg-sky-200/95`}>
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center">
           {showBack && (
             <button

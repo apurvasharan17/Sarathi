@@ -11,6 +11,26 @@ export type SafeSendStatus = (typeof SAFESEND_STATUS)[keyof typeof SAFESEND_STAT
 export type SafeSendGoalType = (typeof SAFESEND_GOAL)[keyof typeof SAFESEND_GOAL];
 export type ProofStatus = (typeof PROOF_STATUS)[keyof typeof PROOF_STATUS];
 
+export type TransactionRiskLevel = 'low' | 'medium' | 'high';
+
+export interface UserTransactionHistoryEntry {
+  timestamp: Date;
+  amount: number;
+  type: 'debit' | 'credit';
+  transactionType: string;
+  counterparty?: string;
+  description?: string;
+  balanceAfter: number;
+  transactionId?: string;
+  riskLevel: TransactionRiskLevel;
+}
+
+export interface UserOverdraftEvent {
+  timestamp: Date;
+  attemptedAmount: number;
+  availableBalance: number;
+}
+
 export interface User {
   _id: string;
   phoneE164: string;
@@ -19,6 +39,9 @@ export interface User {
   stateCode: string;
   kycStatus: KycStatus;
   isAdmin: boolean;
+  totalMoney: number;
+  transactionHistory: UserTransactionHistoryEntry[];
+  overdraftHistory: UserOverdraftEvent[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -83,6 +106,13 @@ export interface ScoringSignals {
   repeatedCounterpartyMonths: number;
   firstLoanRepaid: boolean;
   defaulted: boolean;
+  timelyRepayments: number;
+  delayedRepayments: number;
+  averageBalance: number;
+  balanceStdDev: number;
+  lowRiskTransactions: number;
+  highRiskTransactions: number;
+  overdraftCount: number;
 }
 
 export interface ScoringResult {

@@ -30,12 +30,12 @@ Ask about:
 
 ## Setup Instructions 🚀
 
-### Step 1: Get OpenAI API Key
+### Step 1: Get Google Gemini API Key (FREE!)
 
-1. Go to https://platform.openai.com/api-keys
-2. Create an account or login
-3. Click **"Create new secret key"**
-4. Copy the key (starts with `sk-...`)
+1. Go to https://makersuite.google.com/app/apikey
+2. Sign in with Google account
+3. Click **"Create API key"**
+4. Copy the key (starts with `AIza...`)
 
 ### Step 2: Configure Environment
 
@@ -43,7 +43,7 @@ Add to your `.env` file:
 
 ```bash
 # In apps/api/.env (or root .env)
-OPENAI_API_KEY=sk-your-actual-key-here
+GEMINI_API_KEY=AIzaYourActualKeyHere
 ```
 
 ### Step 3: Install Dependencies
@@ -91,9 +91,9 @@ pnpm dev:api
 ## Architecture 🏗️
 
 ### Backend (`apps/api/src/services/aiChat.ts`)
-- OpenAI GPT-4 integration
+- Google Gemini Pro integration
 - Context builder (user data, score, loans)
-- Bilingual system prompts
+- Bilingual system prompts (Hindi + English)
 - Error handling
 
 ### API Route (`apps/api/src/routes/chat.ts`)
@@ -136,28 +136,30 @@ Response:
 
 ## Cost Optimization 💰
 
-### Token Usage
-- GPT-4: ~$0.03 per 1K tokens
-- Average chat: ~500 tokens = $0.015 per conversation
-- System prompt: ~200 tokens
-- User context: ~100 tokens
+### Gemini is FREE! 🎉
+- **Gemini Pro**: Completely FREE up to 60 requests per minute
+- **No credit card required**
+- Perfect for MVP and production!
 
-### Tips to Reduce Costs
-1. **Use GPT-3.5-Turbo** (10x cheaper):
-   ```typescript
-   // In aiChat.ts
-   model: 'gpt-3.5-turbo' // instead of 'gpt-4'
-   ```
+### Rate Limits
+- Free tier: 60 requests/minute
+- 1,500 requests/day
+- More than enough for most use cases!
 
-2. **Limit conversation history**:
+### If You Need More (Paid Tier)
+- Gemini Pro: $0.00025 per 1K characters (~100x cheaper than GPT-4!)
+- Ultra high limits available
+
+### Tips to Optimize
+1. **Limit conversation history**:
    ```typescript
    // Keep last 5 messages only
    ...conversationHistory.slice(-5)
    ```
 
-3. **Reduce max_tokens**:
+2. **Reduce maxOutputTokens**:
    ```typescript
-   max_tokens: 300 // instead of 500
+   maxOutputTokens: 300 // instead of 500
    ```
 
 ## Browser Compatibility 🌐
@@ -174,9 +176,9 @@ If voice not supported, text input still works perfectly!
 ## Troubleshooting 🔧
 
 ### "AI Assistant is not configured"
-- Check `OPENAI_API_KEY` in `.env`
+- Check `GEMINI_API_KEY` in `.env`
 - Restart API server
-- Verify key is valid at OpenAI dashboard
+- Verify key is valid at https://makersuite.google.com/app/apikey
 
 ### "Voice input not supported"
 - Use Chrome or Edge browser
@@ -184,9 +186,9 @@ If voice not supported, text input still works perfectly!
 - Use text input as fallback
 
 ### Slow responses
-- GPT-4 can take 3-5 seconds
-- Consider switching to GPT-3.5-turbo
-- Check OpenAI API status
+- Gemini Pro typically responds in 1-2 seconds
+- Check your internet connection
+- Check Google AI Studio status page
 
 ### Hindi voice not working
 - Ensure device has Hindi language pack
@@ -198,15 +200,17 @@ If voice not supported, text input still works perfectly!
 ### Change AI Model
 ```typescript
 // In apps/api/src/services/aiChat.ts
-model: 'gpt-3.5-turbo' // Faster, cheaper
+model: 'gemini-pro'        // Default (free, fast)
 // or
-model: 'gpt-4-turbo'   // Latest, better
+model: 'gemini-1.5-flash'  // Faster
+// or
+model: 'gemini-1.5-pro'    // More capable
 ```
 
 ### Adjust Response Length
 ```typescript
-max_tokens: 300  // Shorter (cheaper)
-max_tokens: 1000 // Longer (more detailed)
+maxOutputTokens: 300  // Shorter responses
+maxOutputTokens: 800  // Longer, detailed responses
 ```
 
 ### Add More Languages
@@ -227,14 +231,16 @@ const systemPrompt = buildSystemPrompt(language, context);
 ## Security & Privacy 🔒
 
 - ✅ User authentication required
-- ✅ Personal data in system prompt (not stored by OpenAI)
+- ✅ Personal data in system prompt (not stored by Google permanently)
 - ✅ Conversation history client-side only
+- ✅ Gemini doesn't use your data for model training
 - ⚠️ Be mindful of PII in conversations
 - ⚠️ Don't log sensitive data
 
 ## Support
 
 For issues or questions, contact the Sarathi team or check:
-- OpenAI Docs: https://platform.openai.com/docs
+- Google AI Studio: https://makersuite.google.com
+- Gemini API Docs: https://ai.google.dev/docs
 - Web Speech API: https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API
 

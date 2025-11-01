@@ -9,6 +9,12 @@ import { EventModel } from '../models/Event.js';
 import { getLatestScore, recomputeAndSaveScore } from '../services/scoring.js';
 import { smsProvider } from '../services/sms/index.js';
 import { AppError, ErrorCodes } from '../utils/errors.js';
+import {
+  adjustUserBalanceWithHistory,
+  withTransaction,
+  classifyRiskLevel,
+  recordOverdraftEvent,
+} from '../services/finance.js';
 
 const router = Router();
 
@@ -151,53 +157,113 @@ router.post('/accept', validateBody(LoanAcceptSchema), async (req: AuthRequest, 
     const { loanId } = req.body;
     const userId = req.user!.userId;
 
-    const loan = await LoanModel.findOne({ _id: loanId, userId });
-    if (!loan) {
-      throw new AppError(ErrorCodes.LOAN_NOT_FOUND, 'Loan not found', 404);
-    }
+    const {
+      disbursedAt,
+      totalMoney,
+      transactionId,
+      principal,
+      termDays,
+      recipientPhone,
+    } = await withTransaction(async session => {
+      const loanQuery = LoanModel.findOne({ _id: loanId, userId });
+      if (session) {
+        loanQuery.session(session);
+      }
+      const loan = await loanQuery;
+      if (!loan) {
+        throw new AppError(ErrorCodes.LOAN_NOT_FOUND, 'Loan not found', 404);
+      }
 
-    if (loan.status !== 'preapproved') {
-      throw new AppError(ErrorCodes.INVALID_INPUT, 'Loan cannot be accepted', 400);
-    }
+      if (loan.status !== 'preapproved') {
+        throw new AppError(ErrorCodes.INVALID_INPUT, 'Loan cannot be accepted', 400);
+      }
 
-    // Update loan status
-    loan.status = 'approved';
-    loan.approvedAt = new Date();
-    await loan.save();
+      loan.status = 'approved';
+      loan.approvedAt = new Date();
+      if (session) {
+        await loan.save({ session });
+      } else {
+        await loan.save();
+      }
 
-    // Mock disbursal - create transaction
-    const user = await UserModel.findById(userId);
-    if (!user) {
-      throw new AppError(ErrorCodes.NOT_FOUND, 'User not found', 404);
-    }
+      const userQuery = UserModel.findById(userId);
+      if (session) {
+        userQuery.session(session);
+      }
+      const user = await userQuery;
+      if (!user) {
+        throw new AppError(ErrorCodes.NOT_FOUND, 'User not found', 404);
+      }
 
-    const transaction = await TransactionModel.create({
-      userId,
-      type: 'loan_disbursal',
-      amount: loan.principal,
-      stateCode: user.stateCode,
-      status: 'success',
+      const createOptions = session ? { session } : undefined;
+      const [transaction] = await TransactionModel.create(
+        [
+          {
+            userId,
+            type: 'loan_disbursal',
+            amount: loan.principal,
+            stateCode: user.stateCode,
+            status: 'success',
+          },
+        ],
+        createOptions
+      );
+
+      loan.status = 'disbursed';
+      loan.disbursedAt = new Date();
+      if (session) {
+        await loan.save({ session });
+      } else {
+        await loan.save();
+      }
+
+      const balanceAfter = await adjustUserBalanceWithHistory({
+        userId,
+        delta: loan.principal,
+        amount: loan.principal,
+        transactionType: 'loan_disbursal',
+        entryType: 'credit',
+        description: 'Loan disbursal',
+        transactionId: transaction._id.toString(),
+        timestamp: transaction.createdAt,
+        riskLevel: classifyRiskLevel(loan.principal),
+        session,
+      });
+
+      const eventOptions = session ? { session } : undefined;
+      await EventModel.create(
+        {
+          userId,
+          topic: 'loan.disbursed',
+          payload: {
+            loanId: loan._id.toString(),
+            amount: loan.principal,
+            transactionId: transaction._id.toString(),
+          },
+        },
+        eventOptions
+      );
+
+      return {
+        disbursedAt: loan.disbursedAt!,
+        totalMoney: balanceAfter,
+        transactionId: transaction._id.toString(),
+        principal: loan.principal,
+        termDays: loan.termDays,
+        recipientPhone: user.phoneE164,
+      };
     });
 
-    // Update loan to disbursed
-    loan.status = 'disbursed';
-    loan.disbursedAt = new Date();
-    await loan.save();
+    const message = `Sarathi: Loan disbursed! Amount: ₹${principal} credited. Repay within ${termDays} days.`;
+    await smsProvider.send(recipientPhone, message);
 
-    // Send SMS
-    const message = `Sarathi: Loan disbursed! Amount: ₹${loan.principal} will be credited shortly. Repay within ${loan.termDays} days.`;
-    await smsProvider.send(user.phoneE164, message);
-
-    // Create event
-    await EventModel.create({
-      userId,
-      topic: 'loan.disbursed',
-      payload: { loanId: loan._id.toString(), amount: loan.principal, transactionId: transaction._id.toString() },
-    });
+    await recomputeAndSaveScore(userId);
 
     res.json({
-      status: loan.status,
-      disbursedAt: loan.disbursedAt,
+      status: 'disbursed',
+      disbursedAt,
+      transactionId,
+      totalMoney,
     });
   } catch (error) {
     next(error);
@@ -209,81 +275,187 @@ router.post('/repay', validateBody(LoanRepaySchema), async (req: AuthRequest, re
     const { loanId, amount } = req.body;
     const userId = req.user!.userId;
 
-    const loan = await LoanModel.findOne({ _id: loanId, userId });
-    if (!loan) {
-      throw new AppError(ErrorCodes.LOAN_NOT_FOUND, 'Loan not found', 404);
-    }
+    const {
+      loanStatus,
+      newRemaining,
+      transactionId,
+      phoneE164,
+      totalMoney,
+      principal,
+      termDays,
+      disbursedAt,
+    } = await withTransaction(async session => {
+      const loanQuery = LoanModel.findOne({ _id: loanId, userId });
+      if (session) {
+        loanQuery.session(session);
+      }
+      const loan = await loanQuery;
+      if (!loan) {
+        throw new AppError(ErrorCodes.LOAN_NOT_FOUND, 'Loan not found', 404);
+      }
 
-    if (loan.status !== 'disbursed') {
-      throw new AppError(ErrorCodes.INVALID_INPUT, 'Loan is not active', 400);
-    }
+      if (loan.status !== 'disbursed') {
+        throw new AppError(ErrorCodes.INVALID_INPUT, 'Loan is not active', 400);
+      }
 
-    const user = await UserModel.findById(userId);
-    if (!user) {
-      throw new AppError(ErrorCodes.NOT_FOUND, 'User not found', 404);
-    }
+      const userQuery = UserModel.findById(userId);
+      if (session) {
+        userQuery.session(session);
+      }
+      const user = await userQuery;
+      if (!user) {
+        throw new AppError(ErrorCodes.NOT_FOUND, 'User not found', 404);
+      }
 
-    // Calculate total due
-    const totalDue = calculateEMI(loan.principal, loan.apr, loan.termDays);
+      const currentBalance = typeof user.totalMoney === 'number' ? user.totalMoney : 5000;
+      if (currentBalance < amount) {
+        const insufficientError = new AppError(
+          ErrorCodes.INSUFFICIENT_FUNDS,
+          'Insufficient balance',
+          400
+        ) as AppError & {
+          metadata?: { userId: string; attemptedAmount: number; availableBalance: number };
+        };
+        insufficientError.metadata = {
+          userId,
+          attemptedAmount: amount,
+          availableBalance: currentBalance,
+        };
+        throw insufficientError;
+      }
 
-    // Get existing repayments
-    const repayments = await TransactionModel.find({
-      userId,
-      type: 'repay',
-      status: 'success',
+      const repaymentsQuery = TransactionModel.find({
+        userId,
+        type: 'repay',
+        status: 'success',
+      });
+      if (session) {
+        repaymentsQuery.session(session);
+      }
+      const repayments = await repaymentsQuery.lean();
+
+      const totalDue = calculateEMI(loan.principal, loan.apr, loan.termDays);
+      const totalRepaid = repayments.reduce((sum, tx) => sum + tx.amount, 0);
+      const remaining = Math.max(0, totalDue - totalRepaid);
+
+      if (amount > remaining) {
+        throw new AppError(
+          ErrorCodes.INVALID_INPUT,
+          'Repayment amount exceeds remaining balance',
+          400
+        );
+      }
+
+      const createOptions = session ? { session } : undefined;
+      const [transaction] = await TransactionModel.create(
+        [
+          {
+            userId,
+            type: 'repay',
+            amount,
+            stateCode: user.stateCode,
+            status: 'success',
+          },
+        ],
+        createOptions
+      );
+
+      const balanceAfter = await adjustUserBalanceWithHistory({
+        userId,
+        delta: -amount,
+        amount,
+        transactionType: 'loan_repay',
+        entryType: 'debit',
+        description: 'Loan repayment',
+        transactionId: transaction._id.toString(),
+        timestamp: transaction.createdAt,
+        riskLevel: classifyRiskLevel(amount),
+        session,
+      });
+
+      const newRemaining = Math.max(0, remaining - amount);
+      let loanStatus: typeof loan.status = loan.status;
+
+      if (newRemaining <= 0) {
+        loan.status = 'repaid';
+        loan.repaidAt = new Date();
+        loanStatus = loan.status;
+      }
+
+      if (session) {
+        await loan.save({ session });
+      } else {
+        await loan.save();
+      }
+
+      const eventPayload = {
+        userId,
+        topic: newRemaining <= 0 ? 'loan.repaid' : 'loan.partial_repay',
+        payload:
+          newRemaining <= 0
+            ? {
+                loanId: loan._id.toString(),
+                transactionId: transaction._id.toString(),
+              }
+            : {
+                loanId: loan._id.toString(),
+                amount,
+                remaining: newRemaining,
+                transactionId: transaction._id.toString(),
+              },
+      };
+
+      const eventOptions = session ? { session } : undefined;
+      await EventModel.create(eventPayload, eventOptions);
+
+      return {
+        loanStatus,
+        newRemaining,
+        transactionId: transaction._id.toString(),
+        phoneE164: user.phoneE164,
+        totalMoney: balanceAfter,
+        principal: loan.principal,
+        termDays: loan.termDays,
+        disbursedAt: loan.disbursedAt,
+      };
     });
 
-    const totalRepaid = repayments.reduce((sum, tx) => sum + tx.amount, 0);
-    const remaining = totalDue - totalRepaid;
+    const message =
+      loanStatus === 'repaid'
+        ? `Sarathi: Loan repaid in full! Amount: ₹${amount}. Great job staying on track.`
+        : `Sarathi: Repayment received! Amount: ₹${amount}. Remaining: ₹${newRemaining.toFixed(0)}.`;
+    await smsProvider.send(phoneE164, message);
 
-    if (amount > remaining) {
-      throw new AppError(ErrorCodes.INVALID_INPUT, 'Repayment amount exceeds remaining balance', 400);
-    }
-
-    // Create repayment transaction
-    const transaction = await TransactionModel.create({
-      userId,
-      type: 'repay',
-      amount,
-      stateCode: user.stateCode,
-      status: 'success',
-    });
-
-    // Check if fully repaid
-    const newRemaining = remaining - amount;
-    if (newRemaining <= 0) {
-      loan.status = 'repaid';
-      loan.repaidAt = new Date();
-      await loan.save();
-
-      // Recompute score (first loan repaid bonus)
-      await recomputeAndSaveScore(userId);
-
-      const message = `Sarathi: Loan repaid in full! Amount: ₹${amount}. Your credit score has been updated.`;
-      await smsProvider.send(user.phoneE164, message);
-
-      await EventModel.create({
-        userId,
-        topic: 'loan.repaid',
-        payload: { loanId: loan._id.toString(), transactionId: transaction._id.toString() },
-      });
-    } else {
-      const message = `Sarathi: Repayment received! Amount: ₹${amount}. Remaining: ₹${newRemaining.toFixed(0)}.`;
-      await smsProvider.send(user.phoneE164, message);
-
-      await EventModel.create({
-        userId,
-        topic: 'loan.partial_repay',
-        payload: { loanId: loan._id.toString(), amount, remaining: newRemaining, transactionId: transaction._id.toString() },
-      });
-    }
+    await recomputeAndSaveScore(userId);
 
     res.json({
-      status: loan.status,
+      status: loanStatus,
       remaining: newRemaining,
-      transactionId: transaction._id.toString(),
+      transactionId,
+      totalMoney,
     });
   } catch (error) {
+    if (error instanceof AppError && error.code === ErrorCodes.INSUFFICIENT_FUNDS) {
+      const metadata = (error as AppError & {
+        metadata?: { userId?: string; attemptedAmount: number; availableBalance: number };
+      }).metadata;
+
+      if (metadata) {
+        const overdraftUserId = metadata.userId ?? req.user!.userId;
+        await recordOverdraftEvent({
+          userId: overdraftUserId,
+          attemptedAmount: metadata.attemptedAmount,
+          availableBalance: metadata.availableBalance,
+        });
+
+        try {
+          await recomputeAndSaveScore(overdraftUserId);
+        } catch (scoreError) {
+          console.error('Failed to recompute score after overdraft', scoreError);
+        }
+      }
+    }
+
     next(error);
   }
 });

@@ -1,21 +1,25 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { Layout } from '../components/Layout';
 
 export default function SendMoneyPage() {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const [amount, setAmount] = useState('');
   const [counterparty, setCounterparty] = useState('');
   const [success, setSuccess] = useState(false);
   const [txId, setTxId] = useState('');
+  const [newBalance, setNewBalance] = useState<number | null>(null);
 
   const remitMutation = useMutation({
     mutationFn: () => api.remit(parseInt(amount), counterparty),
     onSuccess: data => {
       setTxId(data.id);
       setSuccess(true);
+      setNewBalance(data.totalMoney);
+      queryClient.invalidateQueries({ queryKey: ['me'] });
     },
   });
 
@@ -32,7 +36,7 @@ export default function SendMoneyPage() {
           <h2 className="text-2xl font-bold text-green-600 mb-2">
             {t('sendMoney.success')}
           </h2>
-          <div className="mt-6 text-left">
+            <div className="mt-6 text-left">
             <p className="text-sm text-gray-600">{t('sendMoney.receipt')}</p>
             <div className="mt-4 bg-gray-50 p-4 rounded-lg">
               <div className="flex justify-between mb-2">
@@ -47,7 +51,15 @@ export default function SendMoneyPage() {
                 <span className="text-gray-600">{t('sendMoney.transactionId')}</span>
                 <span className="font-mono text-xs">{txId.substring(0, 12)}...</span>
               </div>
-            </div>
+              </div>
+              {newBalance !== null && (
+                <div className="flex justify-between mt-3">
+                  <span className="text-gray-600">{t('home.balance')}</span>
+                  <span className="font-bold">
+                    {t('common.rupees')}{newBalance.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )}
           </div>
           <button
             className="btn btn-primary w-full mt-6"
@@ -55,6 +67,7 @@ export default function SendMoneyPage() {
               setSuccess(false);
               setAmount('');
               setCounterparty('');
+                setNewBalance(null);
             }}
           >
             {t('common.close')}

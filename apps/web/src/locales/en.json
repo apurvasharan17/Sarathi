@@ -20,6 +20,7 @@
   "home": {
     "welcome": "Welcome, {{name}}",
     "sarathiId": "Sarathi ID: {{id}}",
+    "balance": "Available Balance",
     "tiles": {
       "sendMoney": "Send Money",
       "creditScore": "Credit Score",
@@ -27,6 +28,18 @@
       "transactions": "Transactions",
       "changeState": "Change State",
       "help": "Help"
+    },
+    "transactions": {
+      "title": "Recent Transactions",
+      "viewAll": "View All",
+      "empty": "No recent transactions",
+      "counterparty": "Counterparty: {{value}}",
+      "unknown": "Transaction",
+      "risk": {
+        "low": "Low risk",
+        "medium": "Medium risk",
+        "high": "High risk"
+      }
     }
   },
   "sendMoney": {
@@ -51,7 +64,13 @@
     "stability": "Stable income pattern",
     "counterparty": "Regular recipient",
     "firstLoan": "First loan repaid",
-    "defaultRisk": "Past default affects score"
+    "defaultRisk": "Past default affects score",
+    "timelyRepay": "Timely repayments rewarded",
+    "balanceStability": "Consistent balance maintained",
+    "lowRiskActivity": "Frequent low-risk transactions",
+    "delayedRepay": "Delayed repayments detected",
+    "overdraftRisk": "Overdraft attempts reduce score",
+    "highRiskActivity": "High-risk transfers observed"
   },
   "loan": {
     "title": "Loan",
@@ -81,7 +100,10 @@
     "type": {
       "remit": "Money Sent",
       "repay": "Loan Repayment",
-      "loan_disbursal": "Loan Disbursed"
+      "loan_disbursal": "Loan Disbursed",
+      "safesend_escrow": "SafeSend Escrow",
+      "safesend_release": "SafeSend Released",
+      "safesend_refund": "SafeSend Refunded"
     },
     "status": {
       "success": "Success",

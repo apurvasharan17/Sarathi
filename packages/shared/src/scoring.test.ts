@@ -12,6 +12,13 @@ describe('computeScore', () => {
       repeatedCounterpartyMonths: 0,
       firstLoanRepaid: false,
       defaulted: false,
+      timelyRepayments: 0,
+      delayedRepayments: 0,
+      averageBalance: 0,
+      balanceStdDev: 0,
+      lowRiskTransactions: 0,
+      highRiskTransactions: 0,
+      overdraftCount: 0,
     };
 
     const result = computeScore(signals);
@@ -28,6 +35,13 @@ describe('computeScore', () => {
       repeatedCounterpartyMonths: 4,
       firstLoanRepaid: false,
       defaulted: false,
+      timelyRepayments: 0,
+      delayedRepayments: 0,
+      averageBalance: 0,
+      balanceStdDev: 0,
+      lowRiskTransactions: 0,
+      highRiskTransactions: 0,
+      overdraftCount: 0,
     };
 
     const result = computeScore(signals);
@@ -48,6 +62,13 @@ describe('computeScore', () => {
       repeatedCounterpartyMonths: 4,
       firstLoanRepaid: true,
       defaulted: false,
+      timelyRepayments: 0,
+      delayedRepayments: 0,
+      averageBalance: 0,
+      balanceStdDev: 0,
+      lowRiskTransactions: 0,
+      highRiskTransactions: 0,
+      overdraftCount: 0,
     };
 
     const result = computeScore(signals);
@@ -65,6 +86,13 @@ describe('computeScore', () => {
       repeatedCounterpartyMonths: 4,
       firstLoanRepaid: true,
       defaulted: true,
+      timelyRepayments: 0,
+      delayedRepayments: 0,
+      averageBalance: 0,
+      balanceStdDev: 0,
+      lowRiskTransactions: 0,
+      highRiskTransactions: 0,
+      overdraftCount: 0,
     };
 
     const result = computeScore(signals);
@@ -82,6 +110,13 @@ describe('computeScore', () => {
       repeatedCounterpartyMonths: 0,
       firstLoanRepaid: false,
       defaulted: false,
+      timelyRepayments: 0,
+      delayedRepayments: 0,
+      averageBalance: 0,
+      balanceStdDev: 0,
+      lowRiskTransactions: 0,
+      highRiskTransactions: 0,
+      overdraftCount: 0,
     };
 
     const result = computeScore(signals);
@@ -98,11 +133,46 @@ describe('computeScore', () => {
       repeatedCounterpartyMonths: 0,
       firstLoanRepaid: false,
       defaulted: false,
+      timelyRepayments: 0,
+      delayedRepayments: 0,
+      averageBalance: 0,
+      balanceStdDev: 0,
+      lowRiskTransactions: 0,
+      highRiskTransactions: 0,
+      overdraftCount: 0,
     };
 
     const result = computeScore(signals);
-    expect(result.score).toBe(610); // 580 + 30
+    expect(result.score).toBe(610); // 580 + 30 without stability bonus
     expect(result.reasonCodes).not.toContain('R2_STABILITY');
+  });
+
+  it('should reward timely repayments and penalize delays and overdrafts', () => {
+    const signals: ScoringSignals = {
+      monthsRemitted2000Plus: 2,
+      last3MonthsStdDev: 200,
+      last3MonthsMean: 1800,
+      repeatedCounterpartyMonths: 1,
+      firstLoanRepaid: false,
+      defaulted: false,
+      timelyRepayments: 3,
+      delayedRepayments: 1,
+      averageBalance: 4500,
+      balanceStdDev: 400,
+      lowRiskTransactions: 6,
+      highRiskTransactions: 1,
+      overdraftCount: 2,
+    };
+
+    const result = computeScore(signals);
+
+    expect(result.score).toBe(610);
+    expect(result.reasonCodes).toContain('R6_TIMELY_REPAY');
+    expect(result.reasonCodes).toContain('R9_DELAYED_REPAY');
+    expect(result.reasonCodes).toContain('R7_BALANCE_STABILITY');
+    expect(result.reasonCodes).toContain('R8_LOW_RISK_ACTIVITY');
+    expect(result.reasonCodes).toContain('R11_HIGH_RISK_ACTIVITY');
+    expect(result.reasonCodes).toContain('R10_OVERDRAFT_RISK');
   });
 });
 

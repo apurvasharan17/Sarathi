@@ -71,13 +71,74 @@ export async function calculateScoringSignals(userId: string): Promise<ScoringSi
     }
   }
 
-  // Check for first loan repaid
-  const repaidLoan = await LoanModel.findOne({ userId, status: 'repaid' });
-  const firstLoanRepaid = !!repaidLoan;
+  const loans = await LoanModel.find({ userId }).lean();
+  const firstLoanRepaid = loans.some(loan => loan.status === 'repaid');
+  const defaulted = loans.some(loan => loan.status === 'defaulted');
 
-  // Check for defaulted loans
-  const defaultedLoan = await LoanModel.findOne({ userId, status: 'defaulted' });
-  const defaulted = !!defaultedLoan;
+  let timelyRepayments = 0;
+  let delayedRepayments = 0;
+  const now = new Date();
+
+  for (const loan of loans) {
+    if (!loan.disbursedAt) {
+      continue;
+    }
+
+    const dueDate = new Date(loan.disbursedAt);
+    dueDate.setDate(dueDate.getDate() + loan.termDays);
+
+    if (loan.status === 'repaid') {
+      if (loan.repaidAt && loan.repaidAt <= dueDate) {
+        timelyRepayments += 1;
+      } else {
+        delayedRepayments += 1;
+      }
+    } else if (loan.status === 'disbursed' && dueDate < now) {
+      delayedRepayments += 1;
+    } else if (loan.status === 'defaulted') {
+      delayedRepayments += 1;
+    }
+  }
+
+  const user = await UserModel.findById(userId).lean();
+  const transactionHistory = (user?.transactionHistory ?? []).filter(entry => {
+    if (!entry.timestamp) {
+      return false;
+    }
+    const ts = new Date(entry.timestamp);
+    return ts >= sixMonthsAgo;
+  });
+
+  const balanceSamples = transactionHistory.map(entry => entry.balanceAfter ?? 0);
+  const averageBalance = balanceSamples.length
+    ? balanceSamples.reduce((sum, value) => sum + value, 0) / balanceSamples.length
+    : 0;
+
+  let balanceStdDev = 0;
+  if (balanceSamples.length > 1) {
+    const variance =
+      balanceSamples.reduce(
+        (sum, value) => sum + Math.pow(value - averageBalance, 2),
+        0
+      ) / balanceSamples.length;
+    balanceStdDev = Math.sqrt(variance);
+  }
+
+  const lowRiskTransactions = transactionHistory.filter(
+    entry => entry.riskLevel === 'low'
+  ).length;
+  const highRiskTransactions = transactionHistory.filter(
+    entry => entry.riskLevel === 'high'
+  ).length;
+
+  const overdraftEvents = (user?.overdraftHistory ?? []).filter(event => {
+    if (!event.timestamp) {
+      return false;
+    }
+    const ts = new Date(event.timestamp);
+    return ts >= sixMonthsAgo;
+  });
+  const overdraftCount = overdraftEvents.length;
 
   return {
     monthsRemitted2000Plus,
@@ -86,6 +147,13 @@ export async function calculateScoringSignals(userId: string): Promise<ScoringSi
     repeatedCounterpartyMonths,
     firstLoanRepaid,
     defaulted,
+    timelyRepayments,
+    delayedRepayments,
+    averageBalance,
+    balanceStdDev,
+    lowRiskTransactions,
+    highRiskTransactions,
+    overdraftCount,
   };
 }
 

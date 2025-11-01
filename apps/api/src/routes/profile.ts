@@ -24,6 +24,11 @@ router.get('/me', async (req: AuthRequest, res, next) => {
       status: { $in: ['approved', 'disbursed'] },
     });
 
+    const historyEntries = (user.transactionHistory ?? [])
+      .slice(-20)
+      .map(entry => entry.toObject?.() ?? entry)
+      .reverse();
+
     res.json({
       user: {
         userId: user._id.toString(),
@@ -33,6 +38,8 @@ router.get('/me', async (req: AuthRequest, res, next) => {
         stateCode: user.stateCode,
         kycStatus: user.kycStatus,
         isAdmin: user.isAdmin,
+        totalMoney: typeof user.totalMoney === 'number' ? user.totalMoney : 5000,
+        transactionHistory: historyEntries,
       },
       latestScore,
       activeLoan: activeLoan

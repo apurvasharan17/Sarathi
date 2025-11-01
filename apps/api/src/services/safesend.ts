@@ -6,6 +6,13 @@ import { UserModel } from '../models/User.js';
 import { smsProvider } from './sms/index.js';
 import { AppError, ErrorCodes } from '../utils/errors.js';
 import { TRANSACTION_TYPE, TRANSACTION_STATUS } from '@sarathi/shared';
+import {
+  withTransaction,
+  adjustUserBalanceWithHistory,
+  classifyRiskLevel,
+  recordOverdraftEvent,
+} from './finance.js';
+import { recomputeAndSaveScore } from './scoring.js';
 
 export async function createEscrow(
   senderId: string,
@@ -14,49 +21,137 @@ export async function createEscrow(
   goal: string,
   lockReason?: string
 ) {
-  const sender = await UserModel.findById(senderId);
-  if (!sender) throw new AppError(ErrorCodes.NOT_FOUND, 'Sender not found', 404);
+  try {
+    const {
+      escrow,
+      senderPhone,
+      merchantPhone,
+      merchantName,
+      totalMoney,
+    } = await withTransaction(async session => {
+      const senderQuery = UserModel.findById(senderId);
+      if (session) {
+        senderQuery.session(session);
+      }
+      const sender = await senderQuery;
+      if (!sender) throw new AppError(ErrorCodes.NOT_FOUND, 'Sender not found', 404);
 
-  const merchant = await MerchantModel.findById(merchantId);
-  if (!merchant) throw new AppError(ErrorCodes.NOT_FOUND, 'Merchant not found', 404);
+      const merchantQuery = MerchantModel.findById(merchantId);
+      if (session) {
+        merchantQuery.session(session);
+      }
+      const merchant = await merchantQuery;
+      if (!merchant) throw new AppError(ErrorCodes.NOT_FOUND, 'Merchant not found', 404);
 
-  if (!merchant.verified) {
-    throw new AppError(ErrorCodes.INVALID_INPUT, 'Merchant is not verified', 400);
+      if (!merchant.verified) {
+        throw new AppError(ErrorCodes.INVALID_INPUT, 'Merchant is not verified', 400);
+      }
+
+      const currentBalance = typeof sender.totalMoney === 'number' ? sender.totalMoney : 5000;
+      if (currentBalance < amount) {
+        const insufficientError = new AppError(
+          ErrorCodes.INSUFFICIENT_FUNDS,
+          'Insufficient balance',
+          400
+        ) as AppError & {
+          metadata?: { userId: string; attemptedAmount: number; availableBalance: number };
+        };
+        insufficientError.metadata = {
+          userId: senderId,
+          attemptedAmount: amount,
+          availableBalance: currentBalance,
+        };
+        throw insufficientError;
+      }
+
+      const createOptions = session ? { session } : undefined;
+      const escrowDocs = await SafeSendEscrowModel.create(
+        [
+          {
+            senderId,
+            merchantId,
+            amount,
+            goal,
+            status: 'awaiting_proof',
+            lockReason,
+          },
+        ],
+        createOptions
+      );
+
+      const [transaction] = await TransactionModel.create(
+        [
+          {
+            userId: senderId,
+            type: TRANSACTION_TYPE.SAFESEND_ESCROW,
+            amount,
+            counterparty: merchant.phoneE164,
+            stateCode: sender.stateCode,
+            status: TRANSACTION_STATUS.SUCCESS,
+          },
+        ],
+        createOptions
+      );
+
+      const balanceAfter = await adjustUserBalanceWithHistory({
+        userId: senderId,
+        delta: -amount,
+        amount,
+        transactionType: TRANSACTION_TYPE.SAFESEND_ESCROW,
+        entryType: 'debit',
+        counterparty: merchant.phoneE164,
+        description: `SafeSend escrow for ${merchant.name}`,
+        transactionId: transaction._id.toString(),
+        timestamp: transaction.createdAt,
+        riskLevel: classifyRiskLevel(amount),
+        session,
+      });
+
+      return {
+        escrow: escrowDocs[0],
+        senderPhone: sender.phoneE164,
+        merchantPhone: merchant.phoneE164,
+        merchantName: merchant.name,
+        totalMoney: balanceAfter,
+      };
+    });
+
+    await smsProvider.send(
+      senderPhone,
+      `SafeSend: ₹${amount} locked for ${merchantName}. Merchant will submit proof soon. Ref: ${escrow._id}`
+    );
+
+    await smsProvider.send(
+      merchantPhone,
+      `SafeSend: ${senderPhone} sent ₹${amount} for ${goal}. Submit proof to receive funds. Ref: ${escrow._id}`
+    );
+
+    await recomputeAndSaveScore(senderId);
+
+    return { escrow, totalMoney };
+  } catch (error) {
+    if (error instanceof AppError && error.code === ErrorCodes.INSUFFICIENT_FUNDS) {
+      const metadata = (error as AppError & {
+        metadata?: { userId?: string; attemptedAmount: number; availableBalance: number };
+      }).metadata;
+
+      if (metadata) {
+        await recordOverdraftEvent({
+          userId: metadata.userId ?? senderId,
+          attemptedAmount: metadata.attemptedAmount,
+          availableBalance: metadata.availableBalance,
+        });
+
+        try {
+          await recomputeAndSaveScore(metadata.userId ?? senderId);
+        } catch (scoreError) {
+          console.error('Failed to recompute score after SafeSend overdraft', scoreError);
+        }
+      }
+    }
+
+    throw error;
   }
-
-  // Create escrow
-  const escrow = await SafeSendEscrowModel.create({
-    senderId,
-    merchantId,
-    amount,
-    goal,
-    status: 'awaiting_proof',
-    lockReason,
-  });
-
-  // Create escrow transaction
-  await TransactionModel.create({
-    userId: senderId,
-    type: TRANSACTION_TYPE.SAFESEND_ESCROW,
-    amount,
-    counterparty: merchant.phoneE164,
-    stateCode: sender.stateCode,
-    status: TRANSACTION_STATUS.SUCCESS,
-  });
-
-  // Send SMS to sender
-  await smsProvider.send(
-    sender.phoneE164,
-    `SafeSend: ₹${amount} locked for ${merchant.name}. Merchant will submit proof soon. Ref: ${escrow._id}`
-  );
-
-  // Send SMS to merchant
-  await smsProvider.send(
-    merchant.phoneE164,
-    `SafeSend: ${sender.phoneE164} sent ₹${amount} for ${goal}. Submit proof to receive funds. Ref: ${escrow._id}`
-  );
-
-  return escrow;
 }
 
 export async function submitProof(
@@ -186,45 +281,100 @@ export async function reviewProof(
 }
 
 export async function refundEscrow(escrowId: string, adminId: string) {
-  const escrow = await SafeSendEscrowModel.findById(escrowId);
-  if (!escrow) throw new AppError(ErrorCodes.NOT_FOUND, 'Escrow not found', 404);
+  const {
+    escrow,
+    senderPhone,
+    merchantPhone,
+    totalMoney,
+  } = await withTransaction(async session => {
+    const escrowQuery = SafeSendEscrowModel.findById(escrowId);
+    if (session) {
+      escrowQuery.session(session);
+    }
+    const escrow = await escrowQuery;
+    if (!escrow) throw new AppError(ErrorCodes.NOT_FOUND, 'Escrow not found', 404);
 
-  if (escrow.status === 'released' || escrow.status === 'refunded') {
-    throw new AppError(ErrorCodes.INVALID_INPUT, `Cannot refund escrow with status ${escrow.status}`, 400);
-  }
+    if (escrow.status === 'released' || escrow.status === 'refunded') {
+      throw new AppError(
+        ErrorCodes.INVALID_INPUT,
+        `Cannot refund escrow with status ${escrow.status}`,
+        400
+      );
+    }
 
-  escrow.status = 'refunded';
-  escrow.refundedAt = new Date();
-  await escrow.save();
+    escrow.status = 'refunded';
+    escrow.refundedAt = new Date();
+    if (session) {
+      await escrow.save({ session });
+    } else {
+      await escrow.save();
+    }
 
-  // Create refund transaction
-  const sender = await UserModel.findById(escrow.senderId);
-  if (sender) {
-    await TransactionModel.create({
+    const senderQuery = UserModel.findById(escrow.senderId);
+    if (session) {
+      senderQuery.session(session);
+    }
+    const sender = await senderQuery;
+    if (!sender) {
+      throw new AppError(ErrorCodes.NOT_FOUND, 'Sender not found', 404);
+    }
+
+    const createOptions = session ? { session } : undefined;
+    const [transaction] = await TransactionModel.create(
+      [
+        {
+          userId: escrow.senderId,
+          type: TRANSACTION_TYPE.SAFESEND_REFUND,
+          amount: escrow.amount,
+          stateCode: sender.stateCode,
+          status: TRANSACTION_STATUS.SUCCESS,
+        },
+      ],
+      createOptions
+    );
+
+    const balanceAfter = await adjustUserBalanceWithHistory({
       userId: escrow.senderId,
-      type: TRANSACTION_TYPE.SAFESEND_REFUND,
+      delta: escrow.amount,
       amount: escrow.amount,
-      stateCode: sender.stateCode,
-      status: TRANSACTION_STATUS.SUCCESS,
+      transactionType: TRANSACTION_TYPE.SAFESEND_REFUND,
+      entryType: 'credit',
+      description: 'SafeSend refund',
+      transactionId: transaction._id.toString(),
+      timestamp: transaction.createdAt,
+      riskLevel: classifyRiskLevel(escrow.amount),
+      session,
     });
 
-    // Notify sender
-    await smsProvider.send(
-      sender.phoneE164,
-      `SafeSend: ₹${escrow.amount} refunded to your account. Ref: ${escrow._id}`
-    );
-  }
+    const merchantQuery = MerchantModel.findById(escrow.merchantId);
+    if (session) {
+      merchantQuery.session(session);
+    }
+    const merchant = await merchantQuery;
 
-  // Notify merchant
-  const merchant = await MerchantModel.findById(escrow.merchantId);
-  if (merchant) {
+    return {
+      escrow,
+      senderPhone: sender.phoneE164,
+      merchantPhone: merchant?.phoneE164,
+      totalMoney: balanceAfter,
+    };
+  });
+
+  await smsProvider.send(
+    senderPhone,
+    `SafeSend: ₹${escrow.amount} refunded to your account. Ref: ${escrow._id}`
+  );
+
+  if (merchantPhone) {
     await smsProvider.send(
-      merchant.phoneE164,
+      merchantPhone,
       `SafeSend: Escrow ₹${escrow.amount} has been refunded to sender. Ref: ${escrow._id}`
     );
   }
 
-  return escrow;
+  await recomputeAndSaveScore(escrow.senderId);
+
+  return { escrow, totalMoney };
 }
 
 export async function getEscrowsByUser(userId: string, limit = 20, page = 1) {

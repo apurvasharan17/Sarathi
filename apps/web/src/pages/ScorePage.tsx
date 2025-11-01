@@ -9,6 +9,12 @@ const reasonCodeLabels: Record<string, string> = {
   R3_FIRST_TIMER: 'score.firstLoan',
   R4_DEFAULT_RISK: 'score.defaultRisk',
   R5_COUNTERPARTY_STABILITY: 'score.counterparty',
+  R6_TIMELY_REPAY: 'score.timelyRepay',
+  R7_BALANCE_STABILITY: 'score.balanceStability',
+  R8_LOW_RISK_ACTIVITY: 'score.lowRiskActivity',
+  R9_DELAYED_REPAY: 'score.delayedRepay',
+  R10_OVERDRAFT_RISK: 'score.overdraftRisk',
+  R11_HIGH_RISK_ACTIVITY: 'score.highRiskActivity',
 };
 
 export default function ScorePage() {

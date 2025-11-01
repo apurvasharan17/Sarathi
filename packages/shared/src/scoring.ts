@@ -41,6 +41,53 @@ export function computeScore(signals: ScoringSignals): ScoringResult {
     reasonCodes.push(REASON_CODES.R4_DEFAULT_RISK);
   }
 
+  // R6: +12 per timely repayment (cap +48)
+  if (signals.timelyRepayments > 0) {
+    const timelyBonus = Math.min(signals.timelyRepayments * 12, 48);
+    score += timelyBonus;
+    reasonCodes.push(REASON_CODES.R6_TIMELY_REPAY);
+  }
+
+  // R9: −15 per delayed repayment (cap −60)
+  if (signals.delayedRepayments > 0) {
+    const delayedPenalty = Math.min(signals.delayedRepayments * 15, 60);
+    score -= delayedPenalty;
+    reasonCodes.push(REASON_CODES.R9_DELAYED_REPAY);
+  }
+
+  // R7: +12 for consistent balance (avg ≥ ₹4,000 & std-dev ≤ 15% of mean)
+  if (
+    signals.averageBalance >= 4000 &&
+    signals.balanceStdDev <= signals.averageBalance * 0.15
+  ) {
+    score += 12;
+    reasonCodes.push(REASON_CODES.R7_BALANCE_STABILITY);
+  }
+
+  // R8: +2 per low-risk transaction (cap +20) for recent behaviour
+  if (signals.lowRiskTransactions > 0) {
+    const lowRiskBonus = Math.min(signals.lowRiskTransactions * 2, 20);
+    score += lowRiskBonus;
+    reasonCodes.push(REASON_CODES.R8_LOW_RISK_ACTIVITY);
+  }
+
+  // R11: −10 per high-risk transfer (cap −50)
+  if (signals.highRiskTransactions > 0) {
+    const highRiskPenalty = Math.min(signals.highRiskTransactions * 10, 50);
+    score -= highRiskPenalty;
+    reasonCodes.push(REASON_CODES.R11_HIGH_RISK_ACTIVITY);
+  }
+
+  // R10: −20 per overdraft attempt (cap −60)
+  if (signals.overdraftCount > 0) {
+    const overdraftPenalty = Math.min(signals.overdraftCount * 20, 60);
+    score -= overdraftPenalty;
+    reasonCodes.push(REASON_CODES.R10_OVERDRAFT_RISK);
+  }
+
+  // Clamp score within realistic credit score bounds
+  score = Math.max(300, Math.min(score, 900));
+
   // Determine band
   let band: 'A' | 'B' | 'C';
   if (score >= 680) {

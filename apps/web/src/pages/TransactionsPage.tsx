@@ -35,6 +35,9 @@ export default function TransactionsPage() {
     remit: 'transactions.type.remit',
     repay: 'transactions.type.repay',
     loan_disbursal: 'transactions.type.loan_disbursal',
+    safesend_escrow: 'transactions.type.safesend_escrow',
+    safesend_release: 'transactions.type.safesend_release',
+    safesend_refund: 'transactions.type.safesend_refund',
   };
 
   const statusColors: Record<string, string> = {
@@ -53,7 +56,7 @@ export default function TransactionsPage() {
                 <p className="font-bold text-lg">
                   {t('common.rupees')}{tx.amount}
                 </p>
-                <p className="text-sm text-gray-600">{t(typeLabels[tx.type])}</p>
+                <p className="text-sm text-gray-600">{t(typeLabels[tx.type] ?? tx.type)}</p>
               </div>
               <span
                 className={`px-3 py-1 rounded-full text-xs font-bold ${

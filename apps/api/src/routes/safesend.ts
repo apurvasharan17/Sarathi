@@ -66,14 +66,14 @@ router.post(
   async (req: AuthRequest, res, next) => {
     try {
       const { merchantId, amount, goal, lockReason } = req.body;
-      const escrow = await safeSendService.createEscrow(
+      const { escrow, totalMoney } = await safeSendService.createEscrow(
         req.user!.userId,
         merchantId,
         amount,
         goal,
         lockReason
       );
-      res.status(201).json({ escrow });
+      res.status(201).json({ escrow, totalMoney });
     } catch (error) {
       next(error);
     }
@@ -239,8 +239,8 @@ router.post(
   async (req: AuthRequest, res, next) => {
     try {
       const { escrowId } = req.body;
-      const escrow = await safeSendService.refundEscrow(escrowId, req.user!.userId);
-      res.json({ escrow });
+      const { escrow, totalMoney } = await safeSendService.refundEscrow(escrowId, req.user!.userId);
+      res.json({ escrow, totalMoney });
     } catch (error) {
       next(error);
     }
